@@ -1,0 +1,1 @@
+"""This modulen is an emulator for the strava API"""
