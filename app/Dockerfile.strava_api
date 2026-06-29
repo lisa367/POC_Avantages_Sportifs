@@ -1,0 +1,16 @@
+FROM apache/airflow:3.1.8
+
+RUN PWD
+RUN mkdir -p opt/app/
+
+COPY strava/__init__.py /opt/app/strava/
+COPY strava/models.py /opt/app/strava/
+COPY strava/api.py /opt/app/strava/
+
+COPY requirements.txt /
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+ENV PYTHONPATH=/opt/airflow:/opt/airflow/dags:/opt/app/:$PYTHONPATH
+
+WORKDIR /opt/app
