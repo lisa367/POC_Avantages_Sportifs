@@ -1,32 +1,17 @@
 import os
+from dotenv import load_dotenv
 from datetime import datetime as dt, timedelta
-# from flask import Flask
 from fastapi import FastAPI, APIRouter, HTTPException
 from pymongo import MongoClient
 from models import Activity
+
+
+load_dotenv()
 
 client = MongoClient(os.environ.get("MONGO_URI", "mongodb://mongo_api:27017"))
 db = client["strava_history"]
 activities_collection = db["activities"]
 
-# recuperer la liste les employee_id dans la table employees
-# generer un strava user_id pour chq employé et remplir la table employees_strava [employee_id, strava_user_id, commuting_type/method, exercising_type]
-# generer une ligne strava depuis 2025, pour chq employé qui vient en marchant/courant, pour 3 jours de la semaine (entre lundi et vendredi)
-# generer une ligne strava depuis 2025, pour chq employé qui a une activité sportive, pour 3 jours de la semaine (entre lundi et dimanche)
-
-# distance in meters, elapsed_time in seconds, total_elevation_gain in meters
-# {"user_id": 123456, "activities": [{"name": "Run", "type": "Run",  "sport_type": "Run", "start_date_local": "2024-06-01T06:00:00Z", "elapsed_time": 1600, "distance": 5000, "trainer": 0, "commute": 1]}
-# API_RESPONSE = ["name" "type",  "sport_type", "start_date_local", "elapsed_time", "distance", "trainer", "commute"]
-
-api_response_template = {
-    "id": '',
-    "user_id": '',
-    "activities": [
-        {
-            "activity_name", "activity_type", "sport_type", "start_date_local", "elapsed_time", "distance", "trainer", "commute"
-        }
-    ],
-}
 
 api = FastAPI(title="Strava History API")
 router = APIRouter(prefix="/activity", tags=["Activities"])
@@ -92,16 +77,3 @@ async def get_daily_activities(user_id: str, date:str):
 api.include_router(router)
 
 # uvicorn api:api --reload
-
-
-# api = Flask(__name__)
-
-
-# @api.route("/strava")
-# def index():
-#     return "The api is up and running :)"
-
-
-# @api.route("/activity/{int:user_id}", methods=["GET"])
-# def get_activity_data():
-#     return ''

@@ -1,8 +1,10 @@
+import os
 import sys
 import requests
 import logging
 import time
 import pandas as pd
+from dotenv import load_dotenv
 from datetime import datetime as dt
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
@@ -14,7 +16,12 @@ from pathlib import Path
 from models import employees_table, employees_activity_table
 
 
+load_dotenv()
+
 COMPANY_ADDRESS = "1362 avenue des Platanes, 34970 Lattes"
+POSTGRES_URI = os.environ.get("POSTGRES_URI", "postgresql://sports_admin:sports_admin_pwd@postgres_app:5432/sport_data_solutions")
+#  "postgresql:///sport_data_solutions.db"
+
 etl_logger = logging.getLogger("ETLHr_logger")
 etl_logger.setLevel(logging.DEBUG)
 etl_logger.addHandler(logging.StreamHandler(sys.stdout))
@@ -33,9 +40,9 @@ class ETLHr:
         self.query_params = {'q': '{address}', 'format': 'json', 'limit': 1}
         self.query_headers = {"User-Agent": "MyApp/1.0 (myapp@gmail.com)"}
         self.company_geoloc = self.fetch_company_geoloc()
-        self.engine = create_engine("postgresql:///sport_data_solutions.db", echo=True)
-        self.session_class = sessionmaker(bind=self.engine)
-        self.inspector = inspect(self.engine)
+        self.psql_engine = create_engine(POSTGRES_URI, echo=True)
+        self.session_class = sessionmaker(bind=self.psql_engine)
+        self.inspector = inspect(self.psql_engine)
 
     def extract(self) -> dict[str, pd.DataFrame]:
         etl_logger.info("Extracting data")
@@ -45,7 +52,7 @@ class ETLHr:
         } 
 
     def transform(self, data_dict) -> dict[str, pd.DataFrame]:
-        """Google Maps api pour le calcul des distances domicile-travail"""
+        """APIs Nominatim + OSRM pour le calcul des distances domicile-travail"""
         etl_logger.info("Transforming data")
         hr_data = (
             data_dict["hr_data"]
@@ -120,7 +127,7 @@ class ETLHr:
             with self.session_class() as session:
                 if not self.inspector.has_table(table_name):
                     try:
-                        tables[table_name].create(self.engine, checkfirst=True)
+                        tables[table_name].create(self.psql_engine, checkfirst=True)
                         session.commit()
                         etl_logger.info(f"Successfully created {table_name} table")
                     except SQLAlchemyError as err:

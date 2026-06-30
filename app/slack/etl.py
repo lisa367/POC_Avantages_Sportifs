@@ -3,6 +3,7 @@ import sys
 import requests
 import logging
 import time
+from dotenv import load_dotenv
 from datetime import datetime as dt, timedelta
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
@@ -13,6 +14,11 @@ from slack_sdk.errors import SlackApiError
 
 from models import users_activities_table
 
+
+load_dotenv()
+
+POSTGRES_URI = os.environ.get("POSTGRES_URI", "postgresql:///sport_data_solutions.db")
+
 etl_logger = logging.getLogger("ETLSlack")
 etl_logger.setLevel(logging.DEBUG)
 etl_logger.addHandler(logging.StreamHandler(sys.stdout))
@@ -22,10 +28,10 @@ class ETLSlack:
     def __init__(self, execution_date) -> None:
         self.slack_client = WebClient(token=os.environ["SLACK_BOT_TOKEN"])
         self.slack_channel = os.environ["SLACK_CHANNEL"]
-        self.psql_engine = create_engine("postgresql:///sport_data_solutions.db", echo=True)
+        self.psql_engine = create_engine(POSTGRES_URI, echo=True)
         self.session_class = sessionmaker(bind=self.psql_engine)
         self.inspector = inspect(self.psql_engine)
-        self.strava_url = "http://127.0.0.1:8000"
+        self.strava_url = "http://strava_api:8000/activity"
         self.date = execution_date.strftime("%Y-%m-%d")
 
     def get_users(self):

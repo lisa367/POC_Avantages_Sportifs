@@ -2,13 +2,17 @@ import os
 import sys
 import logging
 import random
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from datetime import datetime, timedelta
 from pymongo import MongoClient
 from pydantic import BaseModel
 
-INIT_MODE = True if os.environ.get("INIT") == "True" else False
 
+load_dotenv()
+
+INIT_MODE = True if os.environ.get("INIT") == "True" else False
+POSTGRES_URI = os.environ.get("POSTGRES_URI", "postgresql:///sport_data_solutions.db")
 
 strava_db_logger = logging.getLogger("StravaDbLogger")
 strava_db_logger.setLevel(logging.DEBUG)
@@ -31,7 +35,7 @@ class StravaHistory:
     def __init__(self, start_date, end_date) -> None:
         self.start_date = datetime.strptime(start_date, "%Y-%m-%d")
         self.end_date = datetime.strptime(end_date, "%Y-%m-%d")
-        self.psql_engine = create_engine("postgresql:///sport_data_solutions.db", echo=True)
+        self.psql_engine = create_engine(POSTGRES_URI, echo=True)
         self.mongo_client = MongoClient(os.environ.get("MONGO_URI", "mongodb://mongo_api:27017"))
         self.activities_collection = self.mongo_client["strava_history"]["activities"]
 

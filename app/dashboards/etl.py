@@ -3,6 +3,7 @@ import sys
 import time
 import logging
 import pandas as pd
+from dotenv import load_dotenv
 from datetime import datetime as dt
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
@@ -11,6 +12,11 @@ from sqlalchemy.dialects.postgresql import insert
 
 from models import primes_sportives_table
 
+
+load_dotenv()
+
+POSTGRES_URI = os.environ.get("POSTGRES_URI", "postgresql:///sport_data_solutions.db")
+
 etl_logger = logging.getLogger("ETLCalculPrimes")
 etl_logger.setLevel(logging.DEBUG)
 etl_logger.addHandler(logging.StreamHandler(sys.stdout))
@@ -18,7 +24,7 @@ etl_logger.addHandler(logging.StreamHandler(sys.stdout))
 
 class ETLCalculPrimes:
     def __init__(self, execution_date) -> None:
-        self.psql_engine = create_engine("postgresql:///sport_data_solutions.db", echo=True)
+        self.psql_engine = create_engine(POSTGRES_URI, echo=True)
         self.session_class = sessionmaker(bind=self.psql_engine)
         self.inspector = inspect(self.psql_engine)
         self.date = execution_date.strftime("%Y-%m-%d")
