@@ -49,8 +49,11 @@ x-airflow-common:
   # In order to add custom dependencies or upgrade provider distributions you can use your extended image.
   # Comment the image line, place your Dockerfile in the directory where you placed the docker-compose.yaml
   # and uncomment the "build" line below, Then run `docker-compose build` to build the images.
-  image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:3.2.1}
-  # build: .
+  # image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:3.2.1}
+  image: etl_app:latest
+  build:
+    context: .
+    dockerfile: Dockerfile.app
   env_file:
     - ${ENV_FILE_PATH:-.env}
   environment:
@@ -60,13 +63,15 @@ x-airflow-common:
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
-    AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
+    # AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
+    AIRFLOW__CORE__FERNET_KEY: ''
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'true'
     AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-apiserver:8080/execution/'
     AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW__API_AUTH__JWT_SECRET:-airflow_jwt_secret}
     AIRFLOW__API_AUTH__JWT_ISSUER: ${AIRFLOW__API_AUTH__JWT_ISSUER:-airflow}
-    PYTHONPATH: /opt/airflow:/opt/airflow/dags:/opt/app/etl
+    PYTHONPATH: /opt/app/:/opt/airflow:/opt/airflow/dags
+    # PYTHONPATH=/opt/app:/opt/airflow:/opt/airflow/dags
     # yamllint disable rule:line-length
     # Use simple http server on scheduler for health checks
     # See https://airflow.apache.org/docs/apache-airflow/stable/administration-and-deployment/logging-monitoring/check-health.html#scheduler-health-check-server
@@ -83,7 +88,7 @@ x-airflow-common:
     - ${AIRFLOW_PROJ_DIR:-.}/airflow/config:/opt/airflow/config
     - ${AIRFLOW_PROJ_DIR:-.}/airflow/plugins:/opt/airflow/plugins
     - ${AIRFLOW_PROJ_DIR:-.}/dashboards/:/opt/app/dashboards
-    # - ${AIRFLOW_PROJ_DIR:-.}/data/:/opt/app/data
+    - ${AIRFLOW_PROJ_DIR:-.}/monitoring/:/opt/app/monitoring
     - ${AIRFLOW_PROJ_DIR:-.}/hr/:/opt/app/hr
     - ${AIRFLOW_PROJ_DIR:-.}/slack/:/opt/app/slack
     - ${AIRFLOW_PROJ_DIR:-.}/strava/:/opt/app/strava
@@ -341,13 +346,14 @@ services:
 
   postgres_app:
     image: postgres:16
+    container_name: postgres_app
+    hostname: postgres_app
     environment:
       POSTGRES_USER: sports_admin
       POSTGRES_PASSWORD: sports_admin_pwd
       POSTGRES_DB: sport_data_solutions
-      PORT: 5433
     ports:
-      - "5433:5433"
+      - "5433:5432"
     volumes:
       - postgres-app-volume:/var/lib/postgresql/data
     networks:
@@ -364,27 +370,31 @@ services:
     container_name: metabase
     restart: unless-stopped
     depends_on:
-      - postgres_app
+      postgres_app:
+        condition: service_healthy
     ports:
       - "3000:3000"
     environment:
       MB_DB_TYPE: postgres
       MB_DB_DBNAME: sport_data_solutions
-      MB_DB_PORT: 5433
+      MB_DB_PORT: 5432
       MB_DB_USER: sports_admin
       MB_DB_PASS: sports_admin_pwd
-      MB_DB_HOST: postgres
+      MB_DB_HOST: postgres_app
     networks:
       - app_network
 
-  mongo:
+  mongo_api:
     image: mongo:latest
+    # container_name: mongo_api
     restart: unless-stopped
     hostname: mongo_api
     volumes: 
       - mongo_data-volume:/var/lib/mongo/data/db
     networks:
       - app_network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
 
   etl_app:
     build: 
@@ -393,29 +403,44 @@ services:
     container_name: etl_app
     env_file:
       - .env
-    volumes:
-      - etl_app_volume
+    environment:
+      - POSTGRES_URI=postgresql://sports_admin:sports_admin_pwd@postgres_app:5432/sport_data_solutions
+      # - PYTHONPATH: /opt/app
+
     networks:
       - app_network
     depends_on:
-      - postgres_app
-      - mongo
+      postgres_app:
+        condition: service_healthy
+      mongo_api:
+        condition: service_healthy
 
   strava_api:
     build: 
       context: .
-      dockerfile: Dockerfile.strava_apis
-    container_name: etl_app
+      dockerfile: Dockerfile.strava_api
+    container_name: mongo_api
     env_file:
       - .env
+    environment:
+      - MONGO_URI=mongodb://mongo_api:27017
+    ports:
+      - "8000:8000"
+    # entrypoint:
+    #   - bash
+    #   - -c
+    #   - cd /opt/app/strava && uvicorn api:api --host 0.0.0.0 --port 8000
+    command: >
+      bash -c "cd /opt/app/strava && uvicorn api:api --host 0.0.0.0 --port 8000"
     volumes:
-      - etl_app_volume
+      - ./strava:/opt/app/strava
     networks:
       - app_network
     depends_on:
-      - postgres_app
-      - mongo
-      - metabase
+      postgres_app:
+        condition: service_healthy
+      mongo_api:
+        condition: service_healthy
       
 
 volumes:
